@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type SignalType string
 
 const (
@@ -38,6 +40,6 @@ type DBRecord struct {
 	AdResponse   int64
 	AdImpression int64
 	AdClick      int64
-	DAU          int64
-	CreatedAt    int64
+	DAU          int64 //changing from set to int64 for DB.
+	CreatedAt    time.Time
 }

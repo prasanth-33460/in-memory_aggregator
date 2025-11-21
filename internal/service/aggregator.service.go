@@ -67,3 +67,46 @@ func (agg *Aggregator) Add(req models.SignalRequest, date string) {
 	agg.stats.TotalRequests++
 	agg.stats.CurrentSize = len(agg.data)
 }
+
+func (agg *Aggregator) Flush() []models.DBRecord {
+	agg.mu.Lock()
+	defer agg.mu.Unlock()
+
+	if len(agg.data) == 0 {
+		return nil
+	}
+
+	records := make([]models.DBRecord, 0, len(agg.data))
+	for key, metrics := range agg.data {
+		record := models.DBRecord{
+			Date:         key.Date,
+			App:          key.App,
+			Country:      key.Country,
+			AdRequest:    metrics.AdRequest,
+			AdResponse:   metrics.AdResponse,
+			AdImpression: metrics.AdImpression,
+			AdClick:      metrics.AdClick,
+			DAU:          int64(len(metrics.UniqueUsers)),
+			CreatedAt:    time.Now(),
+		}
+
+		records = append(records, record)
+	}
+	agg.data = make(map[models.DimensionKey]*models.AggregatedMetrics)
+	agg.stats.CurrentSize = 0
+	agg.stats.LastFlushTime = time.Now()
+
+	return records
+}
+
+func (agg *Aggregator) GetStats() Stats {
+	agg.mu.RLock()
+	defer agg.mu.RUnlock()
+	return agg.stats
+}
+
+func (agg *Aggregator) GetCurrentSize() int {
+	agg.mu.RLock()
+	defer agg.mu.RUnlock()
+	return len(agg.data)
+}

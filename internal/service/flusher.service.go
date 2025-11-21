@@ -10,28 +10,28 @@ import (
 )
 
 type Flusher struct {
-	aggregator     *Aggregator
-	db             *database.Database
-	timeTicker     *time.Ticker //5 seconds
-	done           chan struct{}
-	wg             sync.WaitGroup
-	flushInterval  time.Duration
-	flushThreshold int
+	aggregator *Aggregator
+	db         *database.Database
+	timeTicker *time.Ticker //5 seconds
+	done       chan struct{}
+	wg         sync.WaitGroup
+	dlq        *DeadLetterQueue
 }
 
-func NewFlusher(agg *Aggregator, db *database.Database, interval time.Duration, threshold int) *Flusher {
+func NewFlusher(agg *Aggregator, db *database.Database, interval time.Duration) *Flusher {
+	dlq := NewDeadLetterQueue(db, 3, 5*time.Second)
 	return &Flusher{
-		aggregator:     agg,
-		db:             db,
-		timeTicker:     time.NewTicker(interval),
-		done:           make(chan struct{}),
-		flushInterval:  interval,
-		flushThreshold: threshold,
+		dlq:        dlq,
+		aggregator: agg,
+		db:         db,
+		timeTicker: time.NewTicker(interval),
+		done:       make(chan struct{}),
 	}
 }
 
 func (f *Flusher) Start(ctx context.Context) {
 	log.Println("Flusher started")
+	f.dlq.Start(ctx)
 	f.wg.Add(1)
 	go func() {
 		defer f.wg.Done()
@@ -65,6 +65,7 @@ func (f *Flusher) flush(ctx context.Context, reason string) {
 	if err != nil {
 		log.Printf("failed to flush %d records to database: %v", len(records), err)
 		log.Printf("%d records were lost!", len(records))
+		f.dlq.Add(records, err)
 		return
 	}
 
@@ -78,6 +79,13 @@ func (f *Flusher) Stop(ctx context.Context) {
 	close(f.done)
 	f.wg.Wait()
 	f.flush(ctx, "shutdown")
+	f.dlq.Stop(ctx)
 
 	log.Println("Flusher stopped")
+}
+
+func (f *Flusher) Stats() map[string]any {
+	return map[string]any{
+		"dlq": f.dlq.Stats(),
+	}
 }

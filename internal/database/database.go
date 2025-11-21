@@ -63,7 +63,7 @@ func (d *Database) BatchInsertRecords(ctx context.Context, records []models.DBRe
 	}
 
 	const maxParamsPerQuery = 65535
-	const paramsPerRecord = 10
+	const paramsPerRecord = 9
 	const maxRecordsPerBatch = maxParamsPerQuery / paramsPerRecord
 
 	for i := 0; i < len(records); i += maxRecordsPerBatch {
@@ -84,12 +84,12 @@ func (d *Database) BatchInsertRecords(ctx context.Context, records []models.DBRe
 
 func (d *Database) insertBatch(ctx context.Context, records []models.DBRecord) error {
 	valueStrings := make([]string, 0, len(records))
-	valueArgs := make([]any, 0, len(records)*10)
+	valueArgs := make([]any, 0, len(records)*9)
 
 	for i, record := range records {
 		valueStrings = append(valueStrings, fmt.Sprintf(
-			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			i*10+1, i*10+2, i*10+3, i*10+4, i*10+5, i*10+6, i*10+7, i*10+8, i*10+9, i*10+10,
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			i*9+1, i*9+2, i*9+3, i*9+4, i*9+5, i*9+6, i*9+7, i*9+8, i*9+9,
 		))
 
 		valueArgs = append(valueArgs,

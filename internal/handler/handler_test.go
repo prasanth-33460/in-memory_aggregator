@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	service "github.com/prasanth-33460/in-memory_aggregator/internal/aggregator"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/models"
-	"github.com/prasanth-33460/in-memory_aggregator/internal/service"
 )
 
 func TestHandler_IngestSignal(t *testing.T) {

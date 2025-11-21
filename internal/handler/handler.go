@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	service "github.com/prasanth-33460/in-memory_aggregator/internal/aggregator"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/models"
-	"github.com/prasanth-33460/in-memory_aggregator/internal/service"
 )
 
 type Handler struct {

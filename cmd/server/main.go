@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	service "github.com/prasanth-33460/in-memory_aggregator/internal/aggregator"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/database"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/handler"
-	"github.com/prasanth-33460/in-memory_aggregator/internal/service"
 )
 
 func main() {

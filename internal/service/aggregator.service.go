@@ -10,8 +10,9 @@ import (
 type Aggregator struct {
 	data map[models.DimensionKey]*models.AggregatedMetrics
 
-	mu    sync.RWMutex
-	stats Stats
+	mu          sync.RWMutex
+	stats       Stats
+	flushSignal chan struct{}
 }
 
 type Stats struct {
@@ -26,6 +27,7 @@ func NewAggregator() *Aggregator {
 		stats: Stats{
 			LastFlushTime: time.Now(),
 		},
+		flushSignal: make(chan struct{}, 1),
 	}
 }
 
@@ -65,19 +67,32 @@ func (agg *Aggregator) Add(req models.SignalRequest, date string) {
 		metrics.UniqueUsers[req.UserID] = struct{}{}
 	}
 	agg.stats.TotalRequests++
-	agg.stats.CurrentSize = len(agg.data)
+	currentSize := len(agg.data)
+	agg.stats.CurrentSize = currentSize
+
+	shouldFlush := currentSize >= 1000
+	agg.mu.Unlock()
+	if shouldFlush {
+		select {
+		case agg.flushSignal <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (agg *Aggregator) Flush() []models.DBRecord {
 	agg.mu.Lock()
-	defer agg.mu.Unlock()
-
-	if len(agg.data) == 0 {
+	oldData := agg.data
+	agg.data = make(map[models.DimensionKey]*models.AggregatedMetrics)
+	agg.stats.CurrentSize = 0
+	agg.stats.LastFlushTime = time.Now()
+	agg.mu.Unlock()
+	if len(oldData) == 0 {
 		return nil
 	}
 
-	records := make([]models.DBRecord, 0, len(agg.data))
-	for key, metrics := range agg.data {
+	records := make([]models.DBRecord, 0, len(oldData))
+	for key, metrics := range oldData {
 		record := models.DBRecord{
 			Date:         key.Date,
 			App:          key.App,
@@ -92,9 +107,6 @@ func (agg *Aggregator) Flush() []models.DBRecord {
 
 		records = append(records, record)
 	}
-	agg.data = make(map[models.DimensionKey]*models.AggregatedMetrics)
-	agg.stats.CurrentSize = 0
-	agg.stats.LastFlushTime = time.Now()
 
 	return records
 }
@@ -109,4 +121,8 @@ func (agg *Aggregator) GetCurrentSize() int {
 	agg.mu.RLock()
 	defer agg.mu.RUnlock()
 	return len(agg.data)
+}
+
+func (a *Aggregator) FlushSignal() <-chan struct{} {
+	return a.flushSignal
 }

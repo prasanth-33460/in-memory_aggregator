@@ -1,1 +1,127 @@
 package database
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strings"
+	"time"
+
+	_ "github.com/lib/pq"
+	"github.com/prasanth-33460/in-memory_aggregator/internal/models"
+)
+
+type Database struct {
+	db *sql.DB
+}
+
+func NewDatabase(connStr string) (*Database, error) {
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database, check connection: %w", err)
+	}
+
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return &Database{db: db}, nil
+}
+
+func (d *Database) InitSchema(ctx context.Context) error {
+	schema := `
+	CREATE TABLE IF NOT EXISTS ad_signals (
+	id SERIAL PRIMARY KEY,
+	date DATE NOT NULL,
+	app VARCHAR(255) NOT NULL,
+	country VARCHAR(3) NOT NULL, 
+	ad_requests BIGINT DEFAULT 0, 
+	ad_responses BIGINT DEFAULT 0,
+	ad_impressions BIGINT DEFAULT 0,
+	ad_clicks BIGINT DEFAULT 0,
+	dau BIGINT DEFAULT 0,
+    created_at TIMESTAMP NOT NULL,
+	UNIQUE(date, app, country)
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_date_app_country 
+    ON ad_signals(date, app, country);
+	`
+
+	_, err := d.db.ExecContext(ctx, schema)
+
+	return err
+}
+
+func (d *Database) BatchInsertRecords(ctx context.Context, records []models.DBRecord) error {
+	if len(records) == 0 {
+		return nil
+	}
+
+	const maxParamsPerQuery = 65535
+	const paramsPerRecord = 10
+	const maxRecordsPerBatch = maxParamsPerQuery / paramsPerRecord
+
+	for i := 0; i < len(records); i += maxRecordsPerBatch {
+		end := i + maxRecordsPerBatch
+		if end > len(records) {
+			end = len(records)
+		}
+
+		batch := records[i:end]
+
+		if err := d.insertBatch(ctx, batch); err != nil {
+			return fmt.Errorf("failed to insert batch starting at record %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+func (d *Database) insertBatch(ctx context.Context, records []models.DBRecord) error {
+	valueStrings := make([]string, 0, len(records))
+	valueArgs := make([]any, 0, len(records)*10)
+
+	for i, record := range records {
+		valueStrings = append(valueStrings, fmt.Sprintf(
+			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			i*10+1, i*10+2, i*10+3, i*10+4, i*10+5, i*10+6, i*10+7, i*10+8, i*10+9, i*10+10,
+		))
+
+		valueArgs = append(valueArgs,
+			record.Date,
+			record.App,
+			record.Country,
+			record.AdRequest,
+			record.AdResponse,
+			record.AdImpression,
+			record.AdClick,
+			record.DAU,
+			record.CreatedAt,
+		)
+	}
+	query := fmt.Sprintf(`
+        INSERT INTO ad_signals 
+        (date, app, country, ad_requests, ad_responses, ad_impressions, ad_clicks, dau, created_at)
+        VALUES %s
+        ON CONFLICT (date, app, country)
+        DO UPDATE SET
+            ad_requests = ad_signals.ad_requests + EXCLUDED.ad_requests,
+            ad_responses = ad_signals.ad_responses + EXCLUDED.ad_responses,
+            ad_impressions = ad_signals.ad_impressions + EXCLUDED.ad_impressions,
+            ad_clicks = ad_signals.ad_clicks + EXCLUDED.ad_clicks,
+            dau = ad_signals.dau + EXCLUDED.dau,
+            created_at = EXCLUDED.created_at
+    `, strings.Join(valueStrings, ","))
+
+	_, err := d.db.ExecContext(ctx, query, valueArgs...)
+	return err
+}
+
+func (d *Database) Close() error {
+	return d.db.Close()
+}

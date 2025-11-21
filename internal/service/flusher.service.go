@@ -18,7 +18,7 @@ type Flusher struct {
 	dlq        *DeadLetterQueue
 }
 
-func NewFlusher(agg *Aggregator, db *database.Database, interval time.Duration, threshold int) *Flusher {
+func NewFlusher(agg *Aggregator, db *database.Database, interval time.Duration) *Flusher {
 	dlq := NewDeadLetterQueue(db, 3, 5*time.Second)
 	return &Flusher{
 		dlq:        dlq,

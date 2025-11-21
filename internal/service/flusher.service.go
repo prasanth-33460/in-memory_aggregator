@@ -52,12 +52,11 @@ func (f *Flusher) Start(ctx context.Context) {
 }
 
 func (f *Flusher) flush(ctx context.Context, reason string) {
-	log.Printf("Flushing data to DB due to %s...\n", reason)
 	records := f.aggregator.Flush()
-
 	if len(records) == 0 {
 		return
 	}
+	log.Printf("Flushing data to DB due to %s...\n", reason)
 	start := time.Now()
 
 	err := f.db.BatchInsertRecords(ctx, records)

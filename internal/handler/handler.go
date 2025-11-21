@@ -12,11 +12,13 @@ import (
 
 type Handler struct {
 	aggregator *aggregator.Aggregator
+	flusher    *aggregator.Flusher
 }
 
-func NewHandler(agg *aggregator.Aggregator) *Handler {
+func NewHandler(agg *aggregator.Aggregator, flusher *aggregator.Flusher) *Handler {
 	return &Handler{
 		aggregator: agg,
+		flusher:    flusher,
 	}
 }
 
@@ -58,7 +60,7 @@ func (h *Handler) IngestSignal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	date := time.Now().Format("2000-01-01") //year-mm-dd
+	date := time.Now().Format("2006-01-02") //year-mm-dd
 
 	h.aggregator.Add(req, date)
 	w.WriteHeader(http.StatusOK)
@@ -66,12 +68,17 @@ func (h *Handler) IngestSignal(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	stats := h.aggregator.GetStats()
+	flusherStats := h.flusher.Stats()
+
+	dlqStats := flusherStats["dlq"].(map[string]any)
 	response := map[string]any{
-		"status":          "healthy",
-		"total_requests":  stats.TotalRequests,
-		"current_size":    stats.CurrentSize,
-		"last_flush_time": stats.LastFlushTime.Format(time.RFC3339),
-		"uptime_seconds":  time.Since(stats.LastFlushTime).Seconds(),
+		"status":            "healthy",
+		"total_requests":    stats.TotalRequests,
+		"current_size":      stats.CurrentSize,
+		"last_flush_time":   stats.LastFlushTime.Format(time.RFC3339),
+		"uptime_seconds":    time.Since(stats.LastFlushTime).Seconds(),
+		"dlq_queue_size":    dlqStats["queue_size"],
+		"dlq_total_records": dlqStats["total_records"],
 	}
 
 	w.Header().Set("Content-Type", "application/json")

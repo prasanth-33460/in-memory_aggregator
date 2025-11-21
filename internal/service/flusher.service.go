@@ -10,23 +10,19 @@ import (
 )
 
 type Flusher struct {
-	aggregator     *Aggregator
-	db             *database.Database
-	timeTicker     *time.Ticker //5 seconds
-	done           chan struct{}
-	wg             sync.WaitGroup
-	flushInterval  time.Duration
-	flushThreshold int
+	aggregator *Aggregator
+	db         *database.Database
+	timeTicker *time.Ticker //5 seconds
+	done       chan struct{}
+	wg         sync.WaitGroup
 }
 
 func NewFlusher(agg *Aggregator, db *database.Database, interval time.Duration, threshold int) *Flusher {
 	return &Flusher{
-		aggregator:     agg,
-		db:             db,
-		timeTicker:     time.NewTicker(interval),
-		done:           make(chan struct{}),
-		flushInterval:  interval,
-		flushThreshold: threshold,
+		aggregator: agg,
+		db:         db,
+		timeTicker: time.NewTicker(interval),
+		done:       make(chan struct{}),
 	}
 }
 

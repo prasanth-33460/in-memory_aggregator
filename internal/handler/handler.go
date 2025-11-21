@@ -70,15 +70,23 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	stats := h.aggregator.GetStats()
 	flusherStats := h.flusher.Stats()
 
-	dlqStats := flusherStats["dlq"].(map[string]any)
+	var dlqQueueSize, dlqTotalRecords any
+	if dlqStats, ok := flusherStats["dlq"].(map[string]any); ok {
+		dlqQueueSize = dlqStats["queue_size"]
+		dlqTotalRecords = dlqStats["total_records"]
+	} else {
+		dlqQueueSize = 0
+		dlqTotalRecords = 0
+	}
+
 	response := map[string]any{
 		"status":            "healthy",
 		"total_requests":    stats.TotalRequests,
 		"current_size":      stats.CurrentSize,
 		"last_flush_time":   stats.LastFlushTime.Format(time.RFC3339),
 		"uptime_seconds":    time.Since(stats.LastFlushTime).Seconds(),
-		"dlq_queue_size":    dlqStats["queue_size"],
-		"dlq_total_records": dlqStats["total_records"],
+		"dlq_queue_size":    dlqQueueSize,
+		"dlq_total_records": dlqTotalRecords,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

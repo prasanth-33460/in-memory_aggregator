@@ -78,12 +78,15 @@ func (dlq *DeadLetterQueue) Start(ctx context.Context) {
 
 func (dlq *DeadLetterQueue) processRetries(ctx context.Context) {
 	dlq.mu.Lock()
-	defer dlq.mu.Unlock()
+	queueSnapshot := make([]*FailedBatch, len(dlq.queue))
+	copy(queueSnapshot, dlq.queue)
+	dlq.queue = make([]*FailedBatch, 0)
+	dlq.mu.Unlock()
 
 	now := time.Now()
-	remainingBatches := make([]*FailedBatch, 0)
+	remainingBatches := make([]*FailedBatch, 0, len(queueSnapshot))
 
-	for _, batch := range dlq.queue {
+	for _, batch := range queueSnapshot {
 		if now.Before(batch.NextRetryAt) {
 			remainingBatches = append(remainingBatches, batch)
 			continue
@@ -118,7 +121,9 @@ func (dlq *DeadLetterQueue) processRetries(ctx context.Context) {
 		remainingBatches = append(remainingBatches, batch)
 	}
 
-	dlq.queue = remainingBatches
+	dlq.mu.Lock()
+	dlq.queue = append(dlq.queue, remainingBatches...)
+	dlq.mu.Unlock()
 }
 
 func (dlq *DeadLetterQueue) writeToDisk(batch *FailedBatch) {
@@ -127,8 +132,8 @@ func (dlq *DeadLetterQueue) writeToDisk(batch *FailedBatch) {
 		return
 	}
 
-	filename := fmt.Sprintf("dlq_failed/batch_%s.json",
-		time.Now().Format("20060102_150405"))
+	filename := fmt.Sprintf("dlq_failed/batch_%s_%d.json",
+		time.Now().Format("20060102_150405"), time.Now().Nanosecond())
 
 	data, err := json.MarshalIndent(batch, "", "  ")
 	if err != nil {
@@ -151,9 +156,13 @@ func (dlq *DeadLetterQueue) Stop(ctx context.Context) {
 	close(dlq.done)
 
 	time.Sleep(100 * time.Millisecond)
+	
+	dlq.mu.Lock()
+	queueLen := len(dlq.queue)
+	dlq.mu.Unlock()
 
-	if len(dlq.queue) > 0 {
-		log.Printf("Warning: %d batches remain in DLQ, attempting final flush", len(dlq.queue))
+	if queueLen > 0 {
+		log.Printf("Warning: %d batches remain in DLQ, attempting final flush", queueLen)
 		dlq.processRetries(ctx)
 	}
 

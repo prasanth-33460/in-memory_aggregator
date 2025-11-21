@@ -1,4 +1,4 @@
-package aggregator
+package service
 
 import (
 	"sync"
@@ -39,7 +39,7 @@ func (agg *Aggregator) Add(req models.SignalRequest, date string) {
 	}
 
 	agg.mu.Lock()
-	defer agg.mu.Unlock()
+
 
 	if agg.data[key] == nil {
 		agg.data[key] = &models.AggregatedMetrics{

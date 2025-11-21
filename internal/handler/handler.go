@@ -7,15 +7,15 @@ import (
 	"time"
 
 	"github.com/prasanth-33460/in-memory_aggregator/internal/models"
-	aggregator "github.com/prasanth-33460/in-memory_aggregator/internal/service"
+	"github.com/prasanth-33460/in-memory_aggregator/internal/service"
 )
 
 type Handler struct {
-	aggregator *aggregator.Aggregator
-	flusher    *aggregator.Flusher
+	aggregator *service.Aggregator
+	flusher    *service.Flusher
 }
 
-func NewHandler(agg *aggregator.Aggregator, flusher *aggregator.Flusher) *Handler {
+func NewHandler(agg *service.Aggregator, flusher *service.Flusher) *Handler {
 	return &Handler{
 		aggregator: agg,
 		flusher:    flusher,

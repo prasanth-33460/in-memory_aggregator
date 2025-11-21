@@ -12,7 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/database"
 	"github.com/prasanth-33460/in-memory_aggregator/internal/handler"
-	aggregator "github.com/prasanth-33460/in-memory_aggregator/internal/service"
+	"github.com/prasanth-33460/in-memory_aggregator/internal/service"
 )
 
 func main() {
@@ -53,8 +53,8 @@ func main() {
 		log.Fatalf("Failed to initialize database schema: %v", err)
 	}
 
-	agg := aggregator.NewAggregator()
-	flusher := aggregator.NewFlusher(agg, db, 5*time.Second)
+	agg := service.NewAggregator()
+	flusher := service.NewFlusher(agg, db, 5*time.Second)
 	flusher.Start(ctx)
 	h := handler.NewHandler(agg, flusher)
 	mux := http.NewServeMux()
